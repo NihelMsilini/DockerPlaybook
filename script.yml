@@ -42,17 +42,18 @@
     - name: Build the image
       docker_image: path="/home/test/projet/WebApp" name="docker/node-web-app" state=build
     - name: Run the Docker daemon
-      shell: docker run -p 49160:8080 -d docker/node-web-app
+      shell: docker run -p 49160:{{ item }} -d docker/node-web-app
+      with_items:
+        - 3000
+        - 8000
+    - ignore_errors: yes
     - name: Display Docker images to check if the image building was successful
       raw: docker images
       register: image
     - debug: var=image    
-    #- name: Go into docker container and launch the app
-      #docker:
-        #name: docker/node-web-app
-        #image: ubuntu
-        #state: present
-        #command: docker exec -it [container-name] nodejs server.js
-  handlers:
+    - name: The script for the start of mongodb and nodejs
+      shell: echo "#!/bin/bash" > {{ dir }}/myStartupScript.sh
+    - shell: echo "mongod & nodejs server.js" >> {{ dir }}/myStartupScript.sh
+   handlers:
     - name: Docker installed
       service: name=docker state=restarted
