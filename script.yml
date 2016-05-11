@@ -1,0 +1,58 @@
+--- # The main aim of this playbook is to show how to get a Node.js application into a Docker container all launched from a unique Ansible Playbook
+- hosts: aptserver,apacheweb
+  user: test
+  sudo: yes
+  connection: ssh
+  gather_facts: yes
+  tasks:
+    - name: Get EPEL (Extra Packages for Enterprise Linux), a based repository project from Fedora team
+      get_url: url=https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm dest=/home/test/DockerProject
+    - name: Install it using RPM to enable the EPEL repository
+      raw: rpm -Uvh epel-release-latest-7.noarch.rpm
+      register: command_result
+      failed_when: "'FAILED' in command_result.stderr"
+    - name: Update all packages for a RedHat Distribution
+      command: yum -y update 
+      when: ansible_os_family == "RedHat"
+    - name: Update all packages for a Debian Distribution
+      command: apt-get -y update
+      when: ansible_os_family == "Debian"
+    - name: Add the yum repo
+      raw: curl -fsSL https://get.docker.com/ | sh
+    - name: Install Docker for RedHat distributions
+      yum: pkg=docker-engine state=latest
+      when: ansible_os_family == "RedHat"
+      notify: Docker installed
+    - name: Install Docker for Debian distributions
+      apt: pkg=docker-engine state=latest
+      when: ansible_os_family == "Debian"
+      notify: Docker installed
+    - name: Start Docker service and enable it in boot
+      service: name=docker state=started enabled=yes   
+    - name: Add a Dockerfile, the json and the js files from the remote host
+      copy: src=/home/test/DockerProject/WebApp dest=/home/test/projet
+    - name: Install python
+      apt: pkg=python-pip state=latest
+      when: ansible_os_family == "Debian"
+    - name: Install python
+      yum: pkg=python-pip state=latest
+      when: ansible_os_family == "RedHat"
+    - name: Install docker-py
+      pip: name=docker-py state=latest
+    - name: Build the image
+      docker_image: path="/home/test/projet/WebApp" name="docker/node-web-app" state=build
+    - name: Run the Docker daemon
+      shell: docker run -p 49160:8080 -d docker/node-web-app
+    - name: Display Docker images to check if the image building was successful
+      raw: docker images
+      register: image
+    - debug: var=image    
+    #- name: Go into docker container and launch the app
+      #docker:
+        #name: docker/node-web-app
+        #image: ubuntu
+        #state: present
+        #command: docker exec -it [container-name] nodejs server.js
+  handlers:
+    - name: Docker installed
+      service: name=docker state=restarted
